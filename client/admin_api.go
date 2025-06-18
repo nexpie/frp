@@ -51,6 +51,7 @@ func (svr *Service) registerRouteHandlers(helper *httppkg.RouterRegisterHelper) 
 	subRouter.HandleFunc("/api/status", svr.apiStatus).Methods("GET")
 	subRouter.HandleFunc("/api/config", svr.apiGetConfig).Methods("GET")
 	subRouter.HandleFunc("/api/config", svr.apiPutConfig).Methods("PUT")
+	subRouter.HandleFunc("/api/expired", svr.apiExpired).Methods("GET")
 
 	// view
 	subRouter.Handle("/favicon.ico", http.FileServer(helper.AssetsFS)).Methods("GET")
@@ -134,14 +135,16 @@ type ProxyStatusResp struct {
 	LocalAddr  string `json:"local_addr"`
 	Plugin     string `json:"plugin"`
 	RemoteAddr string `json:"remote_addr"`
+	ExpireAt   int64  `json:"expire_at,omitempty"` // Unix timestamp when proxy expires
 }
 
 func NewProxyStatusResp(status *proxy.WorkingStatus, serverAddr string) ProxyStatusResp {
 	psr := ProxyStatusResp{
-		Name:   status.Name,
-		Type:   status.Type,
-		Status: status.Phase,
-		Err:    status.Err,
+		Name:     status.Name,
+		Type:     status.Type,
+		Status:   status.Phase,
+		Err:      status.Err,
+		ExpireAt: status.ExpireAt,
 	}
 	baseCfg := status.Cfg.GetBaseConfig()
 	if baseCfg.LocalPort != 0 {
@@ -259,4 +262,34 @@ func (svr *Service) apiPutConfig(w http.ResponseWriter, r *http.Request) {
 		log.Warnf("%s", res.Msg)
 		return
 	}
+}
+
+// GET /api/expired
+func (svr *Service) apiExpired(w http.ResponseWriter, _ *http.Request) {
+	res := GeneralResponse{Code: 200}
+
+	log.Infof("Http request [/api/expired]")
+	defer func() {
+		log.Infof("Http response [/api/expired]")
+		w.WriteHeader(res.Code)
+		if len(res.Msg) > 0 {
+			_, _ = w.Write([]byte(res.Msg))
+		}
+	}()
+
+	svr.ctlMu.RLock()
+	ctl := svr.ctl
+	svr.ctlMu.RUnlock()
+	if ctl == nil {
+		res.Code = 400
+		res.Msg = "no control connection"
+		return
+	}
+
+	expiredProxies := ctl.pm.GetExpiredProxies()
+	buf, _ := json.Marshal(map[string]interface{}{
+		"expired_proxies": expiredProxies,
+		"count":           len(expiredProxies),
+	})
+	res.Msg = string(buf)
 }

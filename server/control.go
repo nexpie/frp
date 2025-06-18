@@ -380,15 +380,18 @@ func (ctl *Control) handleNewProxy(m msg.Message) {
 		NewProxy: *inMsg,
 	}
 	var remoteAddr string
+	var expireAt int64
 	retContent, err := ctl.pluginManager.NewProxy(content)
 	if err == nil {
 		inMsg = &retContent.NewProxy
+		expireAt = retContent.ExpireAt
 		remoteAddr, err = ctl.RegisterProxy(inMsg)
 	}
 
 	// register proxy in this control
 	resp := &msg.NewProxyResp{
 		ProxyName: inMsg.ProxyName,
+		ExpireAt:  expireAt,
 	}
 	if err != nil {
 		xl.Warnf("new proxy [%s] type [%s] error: %v", inMsg.ProxyName, inMsg.ProxyType, err)
@@ -396,7 +399,11 @@ func (ctl *Control) handleNewProxy(m msg.Message) {
 			err, lo.FromPtr(ctl.serverCfg.DetailedErrorsToClient))
 	} else {
 		resp.RemoteAddr = remoteAddr
-		xl.Infof("new proxy [%s] type [%s] success", inMsg.ProxyName, inMsg.ProxyType)
+		if expireAt > 0 {
+			xl.Infof("new proxy [%s] type [%s] success, expires at %d", inMsg.ProxyName, inMsg.ProxyType, expireAt)
+		} else {
+			xl.Infof("new proxy [%s] type [%s] success", inMsg.ProxyName, inMsg.ProxyType)
+		}
 		metrics.Server.NewProxy(inMsg.ProxyName, inMsg.ProxyType)
 	}
 	_ = ctl.msgDispatcher.Send(resp)
@@ -478,6 +485,7 @@ func (ctl *Control) RegisterProxy(pxyMsg *msg.NewProxy) (remoteAddr string, err 
 		GetWorkConnFn:      ctl.GetWorkConn,
 		Configurer:         pxyConf,
 		ServerCfg:          ctl.serverCfg,
+		ExpireAt:           pxyConf.GetBaseConfig().ExpireAt,
 	})
 	if err != nil {
 		return remoteAddr, err

@@ -57,6 +57,8 @@ type Proxy interface {
 	GetUserInfo() plugin.UserInfo
 	GetLimiter() *rate.Limiter
 	GetLoginMsg() *msg.Login
+	GetExpireAt() int64
+	IsExpired() bool
 	Close()
 }
 
@@ -72,6 +74,7 @@ type BaseProxy struct {
 	userInfo      plugin.UserInfo
 	loginMsg      *msg.Login
 	configurer    v1.ProxyConfigurer
+	expireAt      int64 // Unix timestamp when proxy expires
 
 	mu  sync.RWMutex
 	xl  *xlog.Logger
@@ -108,6 +111,17 @@ func (pxy *BaseProxy) GetLimiter() *rate.Limiter {
 
 func (pxy *BaseProxy) GetConfigurer() v1.ProxyConfigurer {
 	return pxy.configurer
+}
+
+func (pxy *BaseProxy) GetExpireAt() int64 {
+	return pxy.expireAt
+}
+
+func (pxy *BaseProxy) IsExpired() bool {
+	if pxy.expireAt <= 0 {
+		return false // No expiration
+	}
+	return time.Now().Unix() >= pxy.expireAt
 }
 
 func (pxy *BaseProxy) Close() {
@@ -279,6 +293,7 @@ type Options struct {
 	GetWorkConnFn      GetWorkConnFn
 	Configurer         v1.ProxyConfigurer
 	ServerCfg          *v1.ServerConfig
+	ExpireAt           int64 // Unix timestamp when proxy expires
 }
 
 func NewProxy(ctx context.Context, options *Options) (pxy Proxy, err error) {
@@ -304,6 +319,7 @@ func NewProxy(ctx context.Context, options *Options) (pxy Proxy, err error) {
 		userInfo:      options.UserInfo,
 		loginMsg:      options.LoginMsg,
 		configurer:    configurer,
+		expireAt:      options.ExpireAt,
 	}
 
 	factory := proxyFactoryRegistry[reflect.TypeOf(configurer)]
@@ -359,4 +375,20 @@ func (pm *Manager) GetByName(name string) (pxy Proxy, ok bool) {
 	defer pm.mu.RUnlock()
 	pxy, ok = pm.pxys[name]
 	return
+}
+
+// CleanupExpiredProxies removes expired proxies from the manager
+func (pm *Manager) CleanupExpiredProxies() []string {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+
+	expiredNames := make([]string, 0)
+	for name, pxy := range pm.pxys {
+		if pxy.IsExpired() {
+			pxy.Close()
+			delete(pm.pxys, name)
+			expiredNames = append(expiredNames, name)
+		}
+	}
+	return expiredNames
 }

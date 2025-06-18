@@ -57,7 +57,7 @@ func NewManager(
 	}
 }
 
-func (pm *Manager) StartProxy(name string, remoteAddr string, serverRespErr string) error {
+func (pm *Manager) StartProxy(name string, remoteAddr string, serverRespErr string, expireAt int64) error {
 	pm.mu.RLock()
 	pxy, ok := pm.proxies[name]
 	pm.mu.RUnlock()
@@ -65,7 +65,7 @@ func (pm *Manager) StartProxy(name string, remoteAddr string, serverRespErr stri
 		return fmt.Errorf("proxy [%s] not found", name)
 	}
 
-	err := pxy.SetRunningStatus(remoteAddr, serverRespErr)
+	err := pxy.SetRunningStatus(remoteAddr, serverRespErr, expireAt)
 	if err != nil {
 		return err
 	}
@@ -127,6 +127,20 @@ func (pm *Manager) GetProxyStatus(name string) (*WorkingStatus, bool) {
 		return pxy.GetStatus(), true
 	}
 	return nil, false
+}
+
+// GetExpiredProxies returns a list of proxy names that have expired
+func (pm *Manager) GetExpiredProxies() []string {
+	pm.mu.RLock()
+	defer pm.mu.RUnlock()
+
+	expiredNames := make([]string, 0)
+	for name, pxy := range pm.proxies {
+		if pxy.IsExpired() {
+			expiredNames = append(expiredNames, name)
+		}
+	}
+	return expiredNames
 }
 
 func (pm *Manager) UpdateAll(proxyCfgs []v1.ProxyConfigurer) {

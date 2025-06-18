@@ -57,6 +57,7 @@ type WorkingStatus struct {
 
 	// Got from server.
 	RemoteAddr string `json:"remote_addr"`
+	ExpireAt   int64  `json:"expire_at,omitempty"` // Unix timestamp when proxy expires
 }
 
 type Wrapper struct {
@@ -125,7 +126,7 @@ func (pw *Wrapper) SetInWorkConnCallback(cb func(*v1.ProxyBaseConfig, net.Conn, 
 	pw.pxy.SetInWorkConnCallback(cb)
 }
 
-func (pw *Wrapper) SetRunningStatus(remoteAddr string, respErr string) error {
+func (pw *Wrapper) SetRunningStatus(remoteAddr string, respErr string, expireAt int64) error {
 	pw.mu.Lock()
 	defer pw.mu.Unlock()
 	if pw.Phase != ProxyPhaseWaitStart {
@@ -133,6 +134,7 @@ func (pw *Wrapper) SetRunningStatus(remoteAddr string, respErr string) error {
 	}
 
 	pw.RemoteAddr = remoteAddr
+	pw.ExpireAt = expireAt
 	if respErr != "" {
 		pw.Phase = ProxyPhaseStartErr
 		pw.Err = respErr
@@ -274,6 +276,24 @@ func (pw *Wrapper) GetStatus() *WorkingStatus {
 		Err:        pw.Err,
 		Cfg:        pw.Cfg,
 		RemoteAddr: pw.RemoteAddr,
+		ExpireAt:   pw.ExpireAt,
 	}
 	return ps
+}
+
+// GetExpireAt returns the expiration timestamp
+func (pw *Wrapper) GetExpireAt() int64 {
+	pw.mu.RLock()
+	defer pw.mu.RUnlock()
+	return pw.ExpireAt
+}
+
+// IsExpired checks if the proxy has expired
+func (pw *Wrapper) IsExpired() bool {
+	pw.mu.RLock()
+	defer pw.mu.RUnlock()
+	if pw.ExpireAt <= 0 {
+		return false // No expiration
+	}
+	return time.Now().Unix() >= pw.ExpireAt
 }

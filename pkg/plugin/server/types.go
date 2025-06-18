@@ -46,6 +46,7 @@ type UserInfo struct {
 type NewProxyContent struct {
 	User UserInfo `json:"user"`
 	msg.NewProxy
+	ExpireAt int64 `json:"expire_at,omitempty"` // Unix timestamp when proxy expires
 }
 
 type CloseProxyContent struct {

@@ -161,11 +161,15 @@ func (ctl *Control) handleNewProxyResp(m msg.Message) {
 	inMsg := m.(*msg.NewProxyResp)
 	// Server will return NewProxyResp message to each NewProxy message.
 	// Start a new proxy handler if no error got
-	err := ctl.pm.StartProxy(inMsg.ProxyName, inMsg.RemoteAddr, inMsg.Error)
+	err := ctl.pm.StartProxy(inMsg.ProxyName, inMsg.RemoteAddr, inMsg.Error, inMsg.ExpireAt)
 	if err != nil {
 		xl.Warnf("[%s] start error: %v", inMsg.ProxyName, err)
 	} else {
-		xl.Infof("[%s] start proxy success to [%s]", inMsg.ProxyName, inMsg.RemoteAddr)
+		if inMsg.ExpireAt > 0 {
+			xl.Infof("[%s] start proxy success to [%s], expires at %d", inMsg.ProxyName, inMsg.RemoteAddr, inMsg.ExpireAt)
+		} else {
+			xl.Infof("[%s] start proxy success to [%s]", inMsg.ProxyName, inMsg.RemoteAddr)
+		}
 	}
 }
 

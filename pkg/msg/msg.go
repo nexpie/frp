@@ -109,6 +109,7 @@ type NewProxy struct {
 	GroupKey           string            `json:"group_key,omitempty"`
 	Metas              map[string]string `json:"metas,omitempty"`
 	Annotations        map[string]string `json:"annotations,omitempty"`
+	ExpireAt           int64             `json:"expire_at,omitempty"` // Unix timestamp when proxy expires
 
 	// tcp and udp only
 	RemotePort int `json:"remote_port,omitempty"`
@@ -136,6 +137,7 @@ type NewProxyResp struct {
 	ProxyName  string `json:"proxy_name,omitempty"`
 	RemoteAddr string `json:"remote_addr,omitempty"`
 	Error      string `json:"error,omitempty"`
+	ExpireAt   int64  `json:"expire_at,omitempty"` // Unix timestamp when proxy expires
 }
 
 type CloseProxy struct {

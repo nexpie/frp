@@ -125,6 +125,9 @@ type Service struct {
 	ctx context.Context
 	// call cancel to stop service
 	cancel context.CancelFunc
+
+	// cleanup worker for expired proxies
+	cleanupWorkerDone chan struct{}
 }
 
 func NewService(cfg *v1.ServerConfig) (*Service, error) {
@@ -166,6 +169,7 @@ func NewService(cfg *v1.ServerConfig) (*Service, error) {
 		tlsConfig:         tlsConfig,
 		cfg:               cfg,
 		ctx:               context.Background(),
+		cleanupWorkerDone: make(chan struct{}),
 	}
 	if webServer != nil {
 		webServer.RouteRegister(svr.registerRouteHandlers)
@@ -370,6 +374,10 @@ func (svr *Service) Run(ctx context.Context) {
 		go svr.rc.NatHoleController.CleanWorker(svr.ctx)
 	}
 
+	// Start cleanup worker for expired proxies
+	go svr.cleanupExpiredProxiesWorker()
+
+	// Start SSH tunnel gateway
 	if svr.sshTunnelGateway != nil {
 		go svr.sshTunnelGateway.Run()
 	}
@@ -414,6 +422,12 @@ func (svr *Service) Close() error {
 	if svr.cancel != nil {
 		svr.cancel()
 	}
+
+	// Wait for cleanup worker to finish
+	if svr.cleanupWorkerDone != nil {
+		<-svr.cleanupWorkerDone
+	}
+
 	return nil
 }
 
@@ -661,4 +675,23 @@ func (svr *Service) RegisterVisitorConn(visitorConn net.Conn, newMsg *msg.NewVis
 	}
 	return svr.rc.VisitorManager.NewConn(newMsg.ProxyName, visitorConn, newMsg.Timestamp, newMsg.SignKey,
 		newMsg.UseEncryption, newMsg.UseCompression, visitorUser)
+}
+
+// Start cleanup worker for expired proxies
+func (svr *Service) cleanupExpiredProxiesWorker() {
+	ticker := time.NewTicker(1 * time.Minute) // Check every minute
+	defer ticker.Stop()
+	defer close(svr.cleanupWorkerDone)
+
+	for {
+		select {
+		case <-svr.ctx.Done():
+			return
+		case <-ticker.C:
+			expiredNames := svr.pxyManager.CleanupExpiredProxies()
+			if len(expiredNames) > 0 {
+				log.Infof("Cleaned up %d expired proxies: %v", len(expiredNames), expiredNames)
+			}
+		}
+	}
 }
