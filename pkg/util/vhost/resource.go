@@ -28,25 +28,24 @@ var NotFoundPagePath = ""
 
 const (
 	NotFound = `<!DOCTYPE html>
-<html>
-<head>
-<title>Not Found</title>
-<style>
-    body {
-        width: 35em;
-        margin: 0 auto;
-        font-family: Tahoma, Verdana, Arial, sans-serif;
-    }
-</style>
-</head>
-<body>
-<h1>The page you requested was not found.</h1>
-<p>Sorry, the page you are looking for is currently unavailable.<br/>
-Please try again later.</p>
-<p>The server is powered by <a href="https://github.com/fatedier/frp">frp</a>.</p>
-<p><em>Faithfully yours, frp.</em></p>
-</body>
-</html>
+	<html>
+	  <head>
+	    <title>Page Not Found</title>
+	    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	    <link rel="stylesheet" type="text/css" href="https://storage.googleapis.com/nexiiot-storage/404.css" />
+	  </head>
+	  <body>
+	    <div class="error-page">
+	      <img
+	        src="https://storage.googleapis.com/nexiiot-storage/404.png"
+	        style="width: 40%; min-width: 260px; max-width: 400px"
+	      />
+	      <h1>The page could not be found.</h1>
+	      <p>The resource that you are attempting to access does not exist.</p>
+	      <button class="btn" onclick="history.back()">Go back</button>
+	    </div>
+	  </body>
+	</html>
 `
 )
 
